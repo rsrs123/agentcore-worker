@@ -1,13 +1,14 @@
-import { proxyActivities, workflowInfo } from '@temporalio/workflow';
+import { proxyActivities, workflowInfo, startChild } from '@temporalio/workflow';
 import type * as activities from './activities';
-import type { LeadInput, OutreachResult } from './shared';
+import type { LeadInput, OutreachResult, ScoutInput, ScoutResult } from './shared';
+import { TASK_QUEUE } from './shared';
 
-const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail } =
+const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail, runApifyScrape } =
   proxyActivities<typeof activities>({
-    startToCloseTimeout: '60 seconds',
+    startToCloseTimeout: '3 minutes',
     retry: {
       maximumAttempts: 3,
-      initialInterval: '1 second',
+      initialInterval: '2 seconds',
       backoffCoefficient: 2,
     },
   });
@@ -54,5 +55,54 @@ export async function outreachWorkflow(lead: LeadInput): Promise<OutreachResult>
     leadId,
     emailId,
     generatedAt: new Date().toISOString(),
+  };
+}
+
+export async function scoutWorkflow(input: ScoutInput): Promise<ScoutResult> {
+  const maxResults = input.maxResults ?? 10;
+  const autoTrigger = input.autoTriggerOutreach ?? true;
+
+  // Step 1: Scrape leads via Apify Google Maps
+  const scrapedLeads = await runApifyScrape({
+    searchQuery: input.searchQuery,
+    maxResults,
+  });
+
+  let processed = 0;
+
+  // Step 2: For each lead, upsert and optionally trigger outreach
+  for (const lead of scrapedLeads) {
+    if (!lead.company) continue;
+
+    // Upsert lead (source: apify)
+    await upsertLead({
+      name: lead.name,
+      company: lead.company,
+      industry: lead.industry,
+      website: lead.website,
+      email: lead.email || undefined,
+      source: 'apify',
+    });
+
+    // Trigger outreach as independent child workflow
+    if (autoTrigger && lead.name && lead.company) {
+      const childId = `outreach-apify-${lead.company.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
+      try {
+        await startChild(outreachWorkflow, {
+          args: [{ name: lead.name, company: lead.company, industry: lead.industry, email: lead.email }],
+          workflowId: childId,
+          taskQueue: TASK_QUEUE,
+        });
+        processed++;
+      } catch (err: any) {
+        if (err?.name !== 'WorkflowExecutionAlreadyStartedError') throw err;
+      }
+    }
+  }
+
+  return {
+    leadsFound: scrapedLeads.length,
+    leadsProcessed: processed,
+    leads: scrapedLeads,
   };
 }
