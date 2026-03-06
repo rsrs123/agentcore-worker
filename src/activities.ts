@@ -108,18 +108,15 @@ export async function runApifyScrape(params: {
 
   // Start actor run and wait up to 120s for it to finish
   const startRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~google-maps-email-extractor/runs?token=${APIFY_KEY}&waitForFinish=120`,
+    `https://api.apify.com/v2/acts/lukaskrivka~google-maps-with-contact-details/runs?token=${APIFY_KEY}&waitForFinish=120`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         searchStringsArray: [params.searchQuery],
         maxCrawledPlacesPerSearch: params.maxResults,
-        countryCode: 'ES',
+        countryCode: 'es',
         language: 'es',
-        includeHistogram: false,
-        includeOpeningHours: false,
-        includePeopleAlsoSearch: false,
       }),
     }
   );
@@ -144,10 +141,13 @@ export async function runApifyScrape(params: {
     categoryName?: string;
     website?: string;
     emails?: string[];
+    city?: string;
+    phone?: string;
+    permanentlyClosed?: boolean;
   }>;
 
   return items
-    .filter((item) => item.title)
+    .filter((item) => item.title && !item.permanentlyClosed)
     .map((item) => ({
       name: item.title ?? '',
       company: item.title ?? '',
