@@ -1,0 +1,17 @@
+version: "3.5"
+
+services:
+  nodered:
+    container_name: nodered
+    image: nodered/node-red:latest
+    ports:
+      - 1880:1880
+    volumes:
+      - nodered-data:/data
+    environment:
+      - NODE_RED_ENABLE_SAFE_MODE=false
+      - TZ=Europe/Madrid
+    restart: unless-stopped
+
+volumes:
+  nodered-data:
