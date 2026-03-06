@@ -81,18 +81,20 @@ export async function scoutWorkflow(input: ScoutInput): Promise<ScoutResult> {
   for (const lead of scrapedLeads) {
     if (!lead.company) continue;
 
-    // Upsert lead (source: apify)
+    // Only upsert + trigger outreach if we have an email (avoids duplicates for null emails)
+    const email = lead.email || undefined;
+
     await upsertLead({
       name: lead.name,
       company: lead.company,
       industry: lead.industry,
       website: lead.website,
-      email: lead.email || undefined,
+      email,
       source: 'apify',
     });
 
-    // Trigger outreach as independent child workflow
-    if (autoTrigger && lead.name && lead.company) {
+    // Trigger outreach only when we have an email to send to
+    if (autoTrigger && lead.name && lead.company && email) {
       const childId = `outreach-apify-${lead.company.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
       try {
         await startChild(outreachWorkflow, {
