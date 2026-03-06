@@ -7,7 +7,7 @@ create table if not exists leads (
   name text not null,
   company text not null,
   industry text,
-  email text,
+  email text unique,
   linkedin_url text,
   website text,
   pain_point text,
