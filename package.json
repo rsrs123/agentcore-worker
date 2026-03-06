@@ -13,6 +13,7 @@
     "@temporalio/client": "^1.11.0",
     "@temporalio/worker": "^1.11.0",
     "@temporalio/workflow": "^1.11.0",
+    "@supabase/supabase-js": "^2.45.0",
     "groq-sdk": "^0.9.0"
   },
   "devDependencies": {

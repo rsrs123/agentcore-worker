@@ -1,6 +1,29 @@
 import Groq from 'groq-sdk';
+import { supabase } from './supabase';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+export async function upsertLead(lead: {
+  name: string;
+  company: string;
+  industry: string;
+  email?: string;
+  linkedin_url?: string;
+  website?: string;
+  source?: string;
+}): Promise<string> {
+  const { data, error } = await supabase
+    .from('leads')
+    .upsert(
+      { ...lead, status: 'new', source: lead.source ?? 'temporal' },
+      { onConflict: 'email' }
+    )
+    .select('id')
+    .single();
+
+  if (error) throw new Error(`upsertLead failed: ${error.message}`);
+  return data.id as string;
+}
 
 export async function generateOutreachEmail(leadData: {
   name: string;
@@ -36,6 +59,37 @@ Contexto detectado: ${leadData.pain_point}`,
   });
 
   return completion.choices[0].message.content ?? '';
+}
+
+export async function saveOutreachEmail(params: {
+  lead_id: string;
+  subject: string;
+  body: string;
+  research_context: string;
+  workflow_id?: string;
+  run_id?: string;
+}): Promise<string> {
+  const { data, error } = await supabase
+    .from('outreach_emails')
+    .insert({
+      lead_id: params.lead_id,
+      subject: params.subject,
+      body: params.body,
+      research_context: params.research_context,
+      workflow_id: params.workflow_id,
+      run_id: params.run_id,
+      model_used: 'llama-3.3-70b-versatile',
+      status: 'generated',
+    })
+    .select('id')
+    .single();
+
+  if (error) throw new Error(`saveOutreachEmail failed: ${error.message}`);
+
+  // Update lead status to 'researched'
+  await supabase.from('leads').update({ status: 'researched' }).eq('id', params.lead_id);
+
+  return data.id as string;
 }
 
 export async function researchLead(company: string): Promise<string> {
