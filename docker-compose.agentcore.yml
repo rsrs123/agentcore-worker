@@ -75,7 +75,7 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - APIFY_API_KEY=${APIFY_API_KEY}
     ports:
-      - "3001:3001"   # HTTP Trigger API (Huginn + Node-RED integration)
+      - "3020:3020"   # HTTP Trigger API (Huginn + Node-RED integration)
     restart: unless-stopped
 
 volumes:

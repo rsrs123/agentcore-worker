@@ -64,7 +64,7 @@ export async function startApi(temporalAddress: string): Promise<void> {
     res.json({ workflowId, status: 'started', company });
   });
 
-  const PORT = process.env.API_PORT ?? 3001;
+  const PORT = process.env.API_PORT ?? 3020;
   app.listen(PORT, () => {
     console.log(`[AgentCore API] Trigger API listening on :${PORT}`);
   });
