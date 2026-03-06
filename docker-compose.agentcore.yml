@@ -1,5 +1,9 @@
 version: "3.8"
 
+# AgentCore OS — Phase 1
+# All services connect to Temporal via the exposed host port (72.62.29.17:7233)
+# This bypasses Coolify's multi-network DNS resolution issues.
+
 services:
   # ─── TEMPORAL DATABASE ───────────────────────────────────────
   temporal-postgresql:
@@ -39,7 +43,7 @@ services:
     depends_on:
       - temporal
     environment:
-      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_ADDRESS=${VPS_IP:-72.62.29.17}:7233
       - TEMPORAL_CORS_ORIGINS=https://temporal.agentflowing.com
     ports:
       - 8081:8080
@@ -66,7 +70,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_ADDRESS=${VPS_IP:-72.62.29.17}:7233
     restart: unless-stopped
 
 volumes:
