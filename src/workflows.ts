@@ -3,7 +3,7 @@ import type * as activities from './activities';
 import type { LeadInput, OutreachResult, ScoutInput, ScoutResult } from './shared';
 import { TASK_QUEUE } from './shared';
 
-const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail, runApifyScrape } =
+const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail } =
   proxyActivities<typeof activities>({
     startToCloseTimeout: '3 minutes',
     retry: {
@@ -12,6 +12,13 @@ const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail, runA
       backoffCoefficient: 2,
     },
   });
+
+// Apify scraping needs longer timeout + heartbeat
+const { runApifyScrape } = proxyActivities<typeof activities>({
+  startToCloseTimeout: '10 minutes',
+  heartbeatTimeout: '30 seconds',
+  retry: { maximumAttempts: 2, initialInterval: '5 seconds' },
+});
 
 export async function outreachWorkflow(lead: LeadInput): Promise<OutreachResult> {
   const info = workflowInfo();

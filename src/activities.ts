@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk';
+import { Context } from '@temporalio/activity';
 import { supabase } from './supabase';
 import type { ScrapedLead } from './shared';
 
@@ -106,9 +107,9 @@ export async function runApifyScrape(params: {
   const APIFY_KEY = process.env.APIFY_API_KEY;
   if (!APIFY_KEY) throw new Error('APIFY_API_KEY not set');
 
-  // Start actor run and wait up to 120s for it to finish
+  // Start actor run (no waitForFinish — we poll manually with heartbeat)
   const startRes = await fetch(
-    `https://api.apify.com/v2/acts/lukaskrivka~google-maps-with-contact-details/runs?token=${APIFY_KEY}&waitForFinish=120`,
+    `https://api.apify.com/v2/acts/lukaskrivka~google-maps-with-contact-details/runs?token=${APIFY_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -127,7 +128,21 @@ export async function runApifyScrape(params: {
   }
 
   const runData = (await startRes.json()) as { data: { id: string; status: string } };
-  const { id: runId, status } = runData.data;
+  const runId = runData.data.id;
+
+  // Poll until SUCCEEDED or FAILED (heartbeat keeps Temporal alive)
+  const deadline = Date.now() + 8 * 60 * 1000; // 8 minutes max
+  let status = runData.data.status;
+  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED') {
+    if (Date.now() > deadline) throw new Error(`Apify run ${runId} timed out after 8 minutes`);
+    Context.current().heartbeat({ runId, status });
+    await new Promise((r) => setTimeout(r, 10_000)); // poll every 10s
+    const pollRes = await fetch(
+      `https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_KEY}`
+    );
+    const pollData = (await pollRes.json()) as { data: { status: string } };
+    status = pollData.data.status;
+  }
 
   if (status !== 'SUCCEEDED') {
     throw new Error(`Apify run ${runId} ended with status: ${status}`);
