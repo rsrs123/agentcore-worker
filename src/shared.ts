@@ -5,6 +5,7 @@ export interface LeadInput {
   company: string;
   industry: string;
   email?: string;
+  website?: string;
 }
 
 export interface OutreachResult {

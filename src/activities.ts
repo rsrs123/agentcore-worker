@@ -94,10 +94,88 @@ export async function saveOutreachEmail(params: {
   return data.id as string;
 }
 
-export async function researchLead(company: string): Promise<string> {
-  // Fase 1: contexto mock enriquecido
-  // Fase 2: llamara a Apollo + Apify para datos reales
-  return `${company} es una empresa en crecimiento activo buscando optimizar su proceso de adquisicion de clientes y reducir el ciclo de ventas. Han mostrado senales de inversion en herramientas digitales recientes.`;
+export async function researchLead(company: string, website?: string): Promise<string> {
+  if (!website || !process.env.APIFY_API_KEY) {
+    // Fallback: generic mock context
+    return `${company} es una empresa en crecimiento buscando optimizar su proceso de adquisicion de clientes y reducir el ciclo de ventas.`;
+  }
+
+  const APIFY_KEY = process.env.APIFY_API_KEY;
+
+  // Start website content crawler (cheerio = fast, no JS rendering needed)
+  const startRes = await fetch(
+    `https://api.apify.com/v2/acts/apify~website-content-crawler/runs?token=${APIFY_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startUrls: [{ url: website }],
+        maxCrawlPages: 3,
+        crawlerType: 'cheerio',
+        excludeUrlGlobs: ['**/*.pdf', '**/*.jpg', '**/*.png', '**/*.css', '**/*.js'],
+      }),
+    }
+  );
+
+  if (!startRes.ok) {
+    // Non-fatal: fall back to generic context
+    return `${company} opera en el sector ${company} con presencia digital activa en ${website}.`;
+  }
+
+  const runData = (await startRes.json()) as { data: { id: string; status: string } };
+  const runId = runData.data.id;
+
+  // Poll with heartbeat (max 3 min — website crawl is fast with cheerio)
+  const deadline = Date.now() + 3 * 60 * 1000;
+  let status = runData.data.status;
+  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED') {
+    if (Date.now() > deadline) break;
+    Context.current().heartbeat({ runId, status });
+    await new Promise((r) => setTimeout(r, 8_000));
+    const poll = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_KEY}`);
+    status = ((await poll.json()) as { data: { status: string } }).data.status;
+  }
+
+  if (status !== 'SUCCEEDED') {
+    return `${company} es una empresa con presencia activa en ${website}.`;
+  }
+
+  // Get scraped text (first 3 pages merged)
+  const dataRes = await fetch(
+    `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${APIFY_KEY}&limit=3`
+  );
+  const pages = (await dataRes.json()) as Array<{ text?: string }>;
+  const rawText = pages
+    .map((p) => p.text ?? '')
+    .join('\n')
+    .slice(0, 3000); // cap at 3k chars for Groq context
+
+  if (!rawText.trim()) {
+    return `${company} tiene presencia digital en ${website}.`;
+  }
+
+  // Summarize with Groq into actionable sales context
+  const summary = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      {
+        role: 'system',
+        content: `Eres un analista de ventas B2B. A partir del contenido de una web empresarial, extrae en 2-3 frases concisas:
+1. Qué hace exactamente la empresa y para quién
+2. Su propuesta de valor principal
+3. Un posible pain point o área de mejora que podría resolverse con automatización o IA
+Responde SOLO con esas 2-3 frases, sin introducción ni formato.`,
+      },
+      {
+        role: 'user',
+        content: `Empresa: ${company}\nContenido web:\n${rawText}`,
+      },
+    ],
+    temperature: 0.3,
+    max_tokens: 200,
+  });
+
+  return summary.choices[0].message.content ?? `${company} opera en ${website}.`;
 }
 
 export async function runApifyScrape(params: {

@@ -3,7 +3,7 @@ import type * as activities from './activities';
 import type { LeadInput, OutreachResult, ScoutInput, ScoutResult } from './shared';
 import { TASK_QUEUE } from './shared';
 
-const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail } =
+const { generateOutreachEmail, upsertLead, saveOutreachEmail } =
   proxyActivities<typeof activities>({
     startToCloseTimeout: '3 minutes',
     retry: {
@@ -12,6 +12,13 @@ const { generateOutreachEmail, researchLead, upsertLead, saveOutreachEmail } =
       backoffCoefficient: 2,
     },
   });
+
+// researchLead scrapes the web — needs longer timeout + heartbeat
+const { researchLead } = proxyActivities<typeof activities>({
+  startToCloseTimeout: '5 minutes',
+  heartbeatTimeout: '30 seconds',
+  retry: { maximumAttempts: 2, initialInterval: '5 seconds' },
+});
 
 // Apify scraping needs longer timeout + heartbeat
 const { runApifyScrape } = proxyActivities<typeof activities>({
@@ -29,11 +36,12 @@ export async function outreachWorkflow(lead: LeadInput): Promise<OutreachResult>
     company: lead.company,
     industry: lead.industry,
     email: lead.email,
+    website: lead.website,
     source: 'temporal',
   });
 
-  // Step 2: Research the lead (Fase 2: Apollo + Apify)
-  const research = await researchLead(lead.company);
+  // Step 2: Research the lead — real web scrape if website available
+  const research = await researchLead(lead.company, lead.website);
 
   // Step 3: Generate personalized email with context
   const emailBody = await generateOutreachEmail({
@@ -98,7 +106,7 @@ export async function scoutWorkflow(input: ScoutInput): Promise<ScoutResult> {
       const childId = `outreach-apify-${lead.company.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
       try {
         await startChild(outreachWorkflow, {
-          args: [{ name: lead.name, company: lead.company, industry: lead.industry, email: lead.email }],
+          args: [{ name: lead.name, company: lead.company, industry: lead.industry, email, website: lead.website }],
           workflowId: childId,
           taskQueue: TASK_QUEUE,
         });
