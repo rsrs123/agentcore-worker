@@ -9,14 +9,16 @@
     "dev": "ts-node src/worker.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "@temporalio/activity": "^1.11.0",
     "@temporalio/client": "^1.11.0",
     "@temporalio/worker": "^1.11.0",
     "@temporalio/workflow": "^1.11.0",
-    "@supabase/supabase-js": "^2.45.0",
+    "express": "^5.2.1",
     "groq-sdk": "^0.9.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^20.0.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.4.0"

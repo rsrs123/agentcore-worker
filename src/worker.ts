@@ -1,6 +1,7 @@
 import { Worker, NativeConnection } from '@temporalio/worker';
 import * as activities from './activities';
 import { TASK_QUEUE } from './shared';
+import { startApi } from './api';
 
 async function run() {
   const address = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
@@ -17,6 +18,9 @@ async function run() {
     workflowsPath: require.resolve('./workflows'),
     activities,
   });
+
+  // Start HTTP Trigger API alongside the worker
+  await startApi(address);
 
   console.log('[AgentCore Worker] Running...');
   await worker.run();

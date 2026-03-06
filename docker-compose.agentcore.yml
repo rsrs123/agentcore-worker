@@ -73,6 +73,9 @@ services:
       - TEMPORAL_ADDRESS=${VPS_IP:-72.62.29.17}:7233
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - APIFY_API_KEY=${APIFY_API_KEY}
+    ports:
+      - "3001:3001"   # HTTP Trigger API (Huginn + Node-RED integration)
     restart: unless-stopped
 
 volumes:
